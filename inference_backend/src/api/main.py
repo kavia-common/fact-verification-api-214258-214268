@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from src.api.routes.inference import router as inference_router
 
 # Minimal FastAPI app with metadata and tags for future expansion
 openapi_tags = [
@@ -36,11 +37,5 @@ def health_check():
     return {"message": "Healthy"}
 
 
-# Router registration (kept minimal; routes are placeholders for now)
-try:
-    from src.api.routes.inference import router as inference_router
-    app.include_router(inference_router, prefix="/inference", tags=["inference"])
-except Exception:
-    # In case scaffold modules are missing during intermediate states,
-    # avoid breaking the health endpoint or CORS configuration.
-    pass
+# Router registration for inference endpoints
+app.include_router(inference_router, prefix="/inference", tags=["inference"])
