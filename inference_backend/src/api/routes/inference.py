@@ -21,6 +21,7 @@ from src.services.streaming import (
     make_done_event,
     as_fastapi_streaming_response,
 )
+from src.services.logger import log_info, time_block  # structured logging
 
 router = APIRouter()
 
@@ -56,16 +57,32 @@ def run_inference(
       InferenceResponse with detected sentences, claims, and processing metadata.
     """
     started = time.perf_counter()
+    request_id = label.get("request_id")
+    client_label = label.get("client_label")
 
     # Respect options: derive limits with safe bounds.
     top_k = int(getattr(payload, "top_k", 5) or 5)
     # search_limit (number of results per claim) is mapped to top_k from request.
     search_limit = max(1, min(50, top_k))
 
+    log_info(
+        "inference.run:start",
+        event="inference_start",
+        request_id=request_id,
+        client_label=client_label,
+        top_k=top_k,
+        search_limit=search_limit,
+        language=payload.language,
+        streaming=payload.streaming,
+    )
+
     # 1) Sentence splitting
-    raw_sentences: List[str] = get_sentences(payload.text or "")
+    with time_block("sentencize", request_id=request_id, client_label=client_label):
+        raw_sentences: List[str] = get_sentences(payload.text or "")
+
     # 2) Claim detection
-    claim_flags: List[bool] = detect_claims(raw_sentences)
+    with time_block("claim_detection", request_id=request_id, client_label=client_label):
+        claim_flags: List[bool] = detect_claims(raw_sentences)
 
     # Build sentence chunks
     sentence_chunks: List[SentenceChunk] = []
@@ -84,10 +101,26 @@ def run_inference(
     for idx, (s, is_claim) in enumerate(zip(raw_sentences, claim_flags)):
         if not is_claim:
             continue
-        # Search
-        evidence = search_for_claim(s, top_k=search_limit)
-        # Score & categorize
-        scored = categorize_and_score(claim=s, evidence=evidence, top_k=top_k)
+
+        claim_preview = s[:120]
+        with time_block(
+            "claim_search",
+            request_id=request_id,
+            client_label=client_label,
+            sentence_index=idx,
+            claim_preview=claim_preview,
+        ):
+            evidence = search_for_claim(s, top_k=search_limit)
+
+        with time_block(
+            "claim_score",
+            request_id=request_id,
+            client_label=client_label,
+            sentence_index=idx,
+            claim_preview=claim_preview,
+        ):
+            scored = categorize_and_score(claim=s, evidence=evidence, top_k=top_k)
+
         claim_results.append(
             ClaimResult(
                 claim=s,
@@ -117,6 +150,17 @@ def run_inference(
 
     status = "completed"
     message = None
+
+    log_info(
+        "inference.run:end",
+        event="inference_end",
+        request_id=request_id,
+        client_label=client_label,
+        processing_time_ms=elapsed_ms,
+        sentences=len(sentence_chunks),
+        claims=len(claim_results),
+    )
+
     return InferenceResponse(
         status=status,
         sentences=sentence_chunks,
@@ -161,11 +205,26 @@ def stream_inference(
       the connection alive during long searches.
     """
     started = time.perf_counter()
+    request_id = label.get("request_id")
+    client_label = label.get("client_label")
+
     top_k = int(getattr(payload, "top_k", 5) or 5)
     search_limit = max(1, min(50, top_k))
 
-    raw_sentences: List[str] = get_sentences(payload.text or "")
-    claim_flags: List[bool] = detect_claims(raw_sentences)
+    log_info(
+        "inference.stream:start",
+        event="inference_stream_start",
+        request_id=request_id,
+        client_label=client_label,
+        top_k=top_k,
+        search_limit=search_limit,
+        language=payload.language,
+    )
+
+    with time_block("sentencize", request_id=request_id, client_label=client_label):
+        raw_sentences: List[str] = get_sentences(payload.text or "")
+    with time_block("claim_detection", request_id=request_id, client_label=client_label):
+        claim_flags: List[bool] = detect_claims(raw_sentences)
 
     # Internal generator to yield events
     def _generate() -> Iterator[Dict[str, Any]]:
@@ -175,24 +234,45 @@ def stream_inference(
         for idx, (s, is_claim) in enumerate(zip(raw_sentences, claim_flags)):
             chunk = SentenceChunk(text=s, start_char=None, end_char=None, is_claim=bool(is_claim))
             progress = (idx + 1) / total
-            yield make_sentence_event(sentence=chunk.model_dump(), seq=seq, progress=progress)
+            sentence_event = chunk.model_dump()
+            # Attach labels in event metadata
+            sentence_event["_meta"] = {"request_id": request_id, "client_label": client_label}
+            yield make_sentence_event(sentence=sentence_event, seq=seq, progress=progress)
             seq += 1
 
             if not is_claim:
                 continue
 
+            claim_preview = s[:120]
             # Evidence search per-claim
-            evidence = search_for_claim(s, top_k=search_limit)
+            with time_block(
+                "claim_search",
+                request_id=request_id,
+                client_label=client_label,
+                sentence_index=idx,
+                claim_preview=claim_preview,
+            ):
+                evidence = search_for_claim(s, top_k=search_limit)
+
             ev_payload = {
                 "claim": s,
                 "sentence_index": idx,
                 "evidence": evidence,
+                "_meta": {"request_id": request_id, "client_label": client_label},
             }
             yield make_evidence_event(evidence=ev_payload, seq=seq, progress=progress)
             seq += 1
 
             # Scoring and labeling
-            scored = categorize_and_score(claim=s, evidence=evidence, top_k=top_k)
+            with time_block(
+                "claim_score",
+                request_id=request_id,
+                client_label=client_label,
+                sentence_index=idx,
+                claim_preview=claim_preview,
+            ):
+                scored = categorize_and_score(claim=s, evidence=evidence, top_k=top_k)
+
             score_payload = {
                 "claim": s,
                 "sentence_index": idx,
@@ -200,6 +280,7 @@ def stream_inference(
                 "refuting_evidence": scored.get("refuting_evidence", []),
                 "score": float(scored.get("score", 0.0)),
                 "label": scored.get("label"),
+                "_meta": {"request_id": request_id, "client_label": client_label},
             }
             yield make_score_event(score=score_payload, seq=seq, progress=progress)
             seq += 1
@@ -219,8 +300,19 @@ def stream_inference(
                     "streaming": True,
                 },
             },
+            "_meta": {"request_id": request_id, "client_label": client_label},
         }
         yield make_done_event(summary=summary, seq=seq)
+
+        log_info(
+            "inference.stream:end",
+            event="inference_stream_end",
+            request_id=request_id,
+            client_label=client_label,
+            processing_time_ms=elapsed_ms,
+            sentences=len(raw_sentences),
+            claims=sum(1 for f in claim_flags if f),
+        )
 
     # Use heartbeat streaming for long operations
     return as_fastapi_streaming_response(
