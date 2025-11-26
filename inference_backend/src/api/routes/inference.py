@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 from typing import Any, Dict
 
 from src.api.deps.auth import auth_required
@@ -17,6 +17,7 @@ router = APIRouter()
 )
 def run_inference(
     payload: InferenceRequest,
+    response: Response,
     user: Dict[str, Any] = Depends(auth_required),
     label: Dict[str, Any] = Depends(label_context),
 ) -> InferenceResponse:
@@ -24,18 +25,24 @@ def run_inference(
 
     Parameters:
       - payload: JSON with input text and optional parameters (placeholder).
-      - user: injected by auth dependency (placeholder).
-      - label: injected by label dependency (placeholder).
+      - response: FastAPI Response to propagate headers set by dependencies.
+      - user: injected by auth dependency.
+      - label: injected by label dependency.
 
     Returns:
       A simple JSON response indicating the request was received.
     """
-    # We return a minimal InferenceResponse instance to match the schema while keeping placeholder behavior.
+    # The label_context dependency already set X-Request-ID / X-Client-Label on response headers.
+    meta = {
+        "user": user,
+        "label": label,  # contains request_id and client_label
+        "echo": payload.model_dump(),
+    }
     return InferenceResponse(
         status="accepted",
         sentences=[],
         claims=[],
-        metadata={"user": user, "label": label, "echo": payload.model_dump()},
+        metadata=meta,
         message="Inference scaffolding in place.",
     )
 
@@ -47,14 +54,16 @@ def run_inference(
     description="Placeholder streaming endpoint to be implemented with chunked responses.",
 )
 def stream_inference(
+    response: Response,
     user: Dict[str, Any] = Depends(auth_required),
     label: Dict[str, Any] = Depends(label_context),
 ) -> Dict[str, Any]:
     """Streaming placeholder. Will be replaced by Server-Sent Events or WebSocket.
 
     Parameters:
-      - user: injected by auth dependency (placeholder).
-      - label: injected by label dependency (placeholder).
+      - response: Response object so dependency header propagation is consistent.
+      - user: injected by auth dependency.
+      - label: injected by label dependency.
 
     Returns:
       A simple JSON response indicating streaming will be implemented later.
