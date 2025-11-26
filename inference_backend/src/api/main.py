@@ -42,10 +42,11 @@ app = FastAPI(
     openapi_tags=openapi_tags,
 )
 
-# Parameterized CORS configuration via environment variables
-# CORS_ALLOW_ORIGINS: comma-separated list. Defaults to "*" (public) for development.
-# CORS_ALLOW_CREDENTIALS: boolean ("true"/"false"), default True
-# CORS_ALLOW_METHODS / CORS_ALLOW_HEADERS: comma-separated lists, default "*"
+# Parameterized CORS configuration via environment variables.
+# Note: all values should be supplied via .env; no hard-coded defaults beyond safe dev values.
+# - CORS_ALLOW_ORIGINS: comma-separated list (e.g., "https://app.com,https://staging.app.com"). Default ["*"] for dev.
+# - CORS_ALLOW_CREDENTIALS: boolean ("true"/"false"), default True.
+# - CORS_ALLOW_METHODS / CORS_ALLOW_HEADERS: comma-separated lists, default ["*"].
 cors_allow_origins = _env_list("CORS_ALLOW_ORIGINS", default=["*"])
 cors_allow_credentials = _env_bool("CORS_ALLOW_CREDENTIALS", default=True)
 cors_allow_methods = _env_list("CORS_ALLOW_METHODS", default=["*"])

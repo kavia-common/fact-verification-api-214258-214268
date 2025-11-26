@@ -251,11 +251,18 @@ def _formulate_web_query_from_claim(claim: str) -> str:
 def _get_provider() -> SearchProvider:
     """Select a provider based on SEARCH_PROVIDER and available environment variables.
 
+    Environment variables:
+      - SEARCH_PROVIDER: "auto" | "bing" | "duckduckgo" | "wikipedia" (case-insensitive). Default "auto".
+      - BING_API_KEY / SEARCH_API_KEY: API key for Bing Web Search (required if using "bing").
+      - BING_ENDPOINT: Optional custom endpoint for Bing.
+
     SEARCH_PROVIDER values (case-insensitive):
       - "bing": Use BingWebSearchProvider (requires BING_API_KEY or SEARCH_API_KEY).
       - "duckduckgo": Use DuckDuckGoProvider (keyless).
       - "wikipedia": Use WikipediaSearchProvider (keyless).
       - "auto" or unset: Prefer Bing if key provided; otherwise fall back to DuckDuckGo+Wikipedia composite.
+
+    Note: See inference_backend/.env.example for configuration examples.
     """
     # Explicit override
     choice = (os.getenv("SEARCH_PROVIDER") or "auto").strip().lower()

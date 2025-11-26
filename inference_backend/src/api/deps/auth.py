@@ -26,6 +26,7 @@ def auth_required(authorization: Optional[str] = Header(default=None)) -> Dict[s
       - API_TOKEN: Expected bearer token for simple auth (string token). If missing and ALLOW_NO_AUTH is false,
         requests will fail with 401.
       - ALLOW_NO_AUTH: If true, allows missing/empty Authorization header for anonymous access.
+      - Note: No defaults are hardcoded; see .env.example for recommended development defaults.
 
     Returns:
       Dict user context with keys: user_id, scopes, authenticated.
