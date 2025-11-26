@@ -23,8 +23,9 @@ def auth_required(authorization: Optional[str] = Header(default=None)) -> Dict[s
       - If the header is malformed or the token mismatches, raise 401 with WWW-Authenticate.
 
     Environment variables (must be set via .env, do not hardcode values):
-      - API_TOKEN: Expected bearer token for simple auth.
-      - ALLOW_NO_AUTH: If true, allows missing/empty Authorization header.
+      - API_TOKEN: Expected bearer token for simple auth (string token). If missing and ALLOW_NO_AUTH is false,
+        requests will fail with 401.
+      - ALLOW_NO_AUTH: If true, allows missing/empty Authorization header for anonymous access.
 
     Returns:
       Dict user context with keys: user_id, scopes, authenticated.
@@ -33,7 +34,7 @@ def auth_required(authorization: Optional[str] = Header(default=None)) -> Dict[s
     expected = os.getenv("API_TOKEN")
 
     # Allow no auth if configured (anonymous access)
-    if (authorization is None or not authorization.strip()) and allow_no_auth:
+    if (authorization is None or not str(authorization).strip()) and allow_no_auth:
         return {"user_id": "anonymous", "scopes": [], "authenticated": False}
 
     # Otherwise, require proper Bearer token

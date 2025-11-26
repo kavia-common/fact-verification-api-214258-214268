@@ -249,12 +249,36 @@ def _formulate_web_query_from_claim(claim: str) -> str:
 
 
 def _get_provider() -> SearchProvider:
-    """Select a provider based on available environment variables."""
+    """Select a provider based on SEARCH_PROVIDER and available environment variables.
+
+    SEARCH_PROVIDER values (case-insensitive):
+      - "bing": Use BingWebSearchProvider (requires BING_API_KEY or SEARCH_API_KEY).
+      - "duckduckgo": Use DuckDuckGoProvider (keyless).
+      - "wikipedia": Use WikipediaSearchProvider (keyless).
+      - "auto" or unset: Prefer Bing if key provided; otherwise fall back to DuckDuckGo+Wikipedia composite.
+    """
+    # Explicit override
+    choice = (os.getenv("SEARCH_PROVIDER") or "auto").strip().lower()
+
+    if choice == "bing":
+        api_key = os.getenv("BING_API_KEY") or os.getenv("SEARCH_API_KEY")
+        if api_key:
+            endpoint = os.getenv("BING_ENDPOINT")
+            return BingWebSearchProvider(api_key=api_key, endpoint=endpoint)
+        # If requested bing but missing key, gracefully fall back to composite
+        return CompositeProvider([DuckDuckGoProvider(), WikipediaSearchProvider()])
+
+    if choice == "duckduckgo":
+        return DuckDuckGoProvider()
+
+    if choice == "wikipedia":
+        return WikipediaSearchProvider()
+
+    # auto/default
     api_key = os.getenv("BING_API_KEY") or os.getenv("SEARCH_API_KEY")
     if api_key:
-        endpoint = os.getenv("BING_ENDPOINT")  # optional override
+        endpoint = os.getenv("BING_ENDPOINT")
         return BingWebSearchProvider(api_key=api_key, endpoint=endpoint)
-    # Fallback chain: DuckDuckGo first (broad coverage), then Wikipedia
     return CompositeProvider([DuckDuckGoProvider(), WikipediaSearchProvider()])
 
 
@@ -288,7 +312,8 @@ def web_search(query: str, top_k: int = 5) -> List[Dict[str, Any]]:
     """Perform a web search using a pluggable provider system.
 
     Provider selection:
-      - If BING_API_KEY or SEARCH_API_KEY is present, uses Bing Web Search API.
+      - If SEARCH_PROVIDER is set, choose the specified provider (bing/duckduckgo/wikipedia/auto).
+      - If BING_API_KEY or SEARCH_API_KEY is present (or SEARCH_PROVIDER=bing), uses Bing Web Search API.
       - Otherwise, falls back to keyless providers (DuckDuckGo HTML and Wikipedia opensearch).
 
     Returns normalized list of dicts:
