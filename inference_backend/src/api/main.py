@@ -4,6 +4,7 @@ from typing import List
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from src.api.routes.inference import router as inference_router
+from src.config.startup_checks import validate_environment
 
 
 def _env_bool(name: str, default: bool = False) -> bool:
@@ -59,6 +60,10 @@ app.add_middleware(
     allow_methods=cors_allow_methods,
     allow_headers=cors_allow_headers,
 )
+
+# Perform startup validation after app is created and middleware configured,
+# and before routes are mounted to fail fast on misconfiguration.
+validate_environment()
 
 
 # Health endpoint remains unchanged for compatibility
