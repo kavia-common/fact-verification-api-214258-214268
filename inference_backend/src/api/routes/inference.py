@@ -36,7 +36,7 @@ router = APIRouter()
 def run_inference(
     payload: InferenceRequest,
     response: Response,
-    user: Dict[str, Any] = Depends(auth_required),
+    # Removed auth dependency for this route to allow unauthenticated access
     label: Dict[str, Any] = Depends(label_context),
 ) -> InferenceResponse:
     """Run the full inference pipeline for the given input text.
@@ -59,6 +59,9 @@ def run_inference(
     started = time.perf_counter()
     request_id = label.get("request_id")
     client_label = label.get("client_label")
+
+    # Since auth is not required for this endpoint, provide a minimal anonymous user context for metadata.
+    user: Dict[str, Any] = {"user_id": "anonymous", "scopes": [], "authenticated": False}
 
     # Respect options: derive limits with safe bounds.
     top_k = int(getattr(payload, "top_k", 5) or 5)
