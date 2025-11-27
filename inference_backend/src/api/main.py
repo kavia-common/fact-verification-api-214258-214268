@@ -4,7 +4,6 @@ from typing import List
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from src.api.routes.inference import router as inference_router
-# from src.config.startup_checks import validate_environment  # kept for reference; not used at startup
 
 
 def _env_bool(name: str, default: bool = False) -> bool:
@@ -63,7 +62,6 @@ app.add_middleware(
 
 # Startup environment validation is intentionally disabled to allow the app
 # to run even when API_TOKEN is missing and ALLOW_NO_AUTH is false.
-# validate_environment()
 
 
 # PUBLIC_INTERFACE
