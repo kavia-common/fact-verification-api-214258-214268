@@ -14,7 +14,7 @@ def main() -> None:
     Generate the OpenAPI schema to interfaces/openapi.json.
 
     This reads the FastAPI app's openapi() output to ensure all currently
-    registered routes and models (/inference/run and /inference/stream, etc.)
+    registered routes and models (/health, /inference/run and /inference/stream, etc.)
     are reflected in the saved spec.
 
     Note:

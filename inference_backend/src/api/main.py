@@ -66,11 +66,44 @@ app.add_middleware(
 validate_environment()
 
 
-# Health endpoint remains unchanged for compatibility
-@app.get("/", tags=["health"], summary="Health Check")
+# PUBLIC_INTERFACE
+@app.get(
+    "/health",
+    tags=["health"],
+    summary="Health Check",
+    description="Lightweight unauthenticated health check. Returns a minimal JSON payload and 200 OK.",
+    responses={
+        200: {
+            "description": "Service is up",
+            "content": {
+                "application/json": {
+                    "example": {"status": "ok", "app": "fact-verification-inference", "version": "0.1.0", "allow_no_auth": True}
+                }
+            },
+        }
+    },
+)
 def health_check():
-    """Simple health check endpoint."""
-    return {"message": "Healthy"}
+    """Return 200 OK with minimal diagnostics to verify service status.
+
+    Returns:
+      JSON object like:
+        {
+          "status": "ok",
+          "app": "fact-verification-inference",
+          "version": "<app version>",
+          "allow_no_auth": <bool from env>
+        }
+    Notes:
+      - This endpoint is intentionally unauthenticated and performs no external calls.
+      - It should remain extremely fast and dependency-free.
+    """
+    return {
+        "status": "ok",
+        "app": "fact-verification-inference",
+        "version": app.version if hasattr(app, "version") else "unknown",
+        "allow_no_auth": _env_bool("ALLOW_NO_AUTH", default=False),
+    }
 
 
 # Router registration for inference endpoints
