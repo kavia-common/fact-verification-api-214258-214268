@@ -7,20 +7,26 @@ from src.api.routes.inference import router as inference_router
 
 
 def _env_bool(name: str, default: bool = False) -> bool:
-    """Parse boolean-like env values safely."""
-    raw = os.getenv(name)
-    if raw is None:
+    """Parse boolean-like env values safely; never raise on import."""
+    try:
+        raw = os.getenv(name)
+        if raw is None:
+            return default
+        return str(raw).strip().lower() in {"1", "true", "yes", "on"}
+    except Exception:
         return default
-    return str(raw).strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _env_list(name: str, default: List[str]) -> List[str]:
-    """Parse comma-separated env list, trimming whitespace, ignoring empties."""
-    raw = os.getenv(name)
-    if raw is None:
-        return default
-    items = [x.strip() for x in raw.split(",")]
-    return [x for x in items if x]
+    """Parse comma-separated env list safely, trimming whitespace and ignoring empties."""
+    try:
+        raw = os.getenv(name)
+        if raw is None:
+            return list(default)
+        items = [x.strip() for x in str(raw).split(",")]
+        return [x for x in items if x]
+    except Exception:
+        return list(default)
 
 
 # Minimal FastAPI app with metadata and tags for future expansion

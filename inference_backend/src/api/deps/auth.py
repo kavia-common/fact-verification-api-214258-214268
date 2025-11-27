@@ -5,11 +5,14 @@ from fastapi import Header, HTTPException, status
 
 
 def _env_bool(name: str, default: bool = False) -> bool:
-    """Parse a boolean-like environment variable."""
-    raw = os.getenv(name)
-    if raw is None:
+    """Parse a boolean-like environment variable safely without raising."""
+    try:
+        raw = os.getenv(name)
+        if raw is None:
+            return default
+        return str(raw).strip().lower() in {"1", "true", "yes", "on"}
+    except Exception:
         return default
-    return str(raw).strip().lower() in {"1", "true", "yes", "on"}
 
 
 # PUBLIC_INTERFACE
